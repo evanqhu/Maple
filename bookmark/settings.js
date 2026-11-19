@@ -6,14 +6,10 @@ const SETTINGS_KEYS = {
   KEEP_PANEL_OPEN: "MAPLE_KEEP_PANEL_OPEN",
 };
 
-const DISPLAY_MODE_KEY = "MAPLE_DISPLAY_MODE";
 const DEDUPE_SETTING_KEY = "MAPLE_DEDUPE_TABS";
 const TABS_PERMISSION = { permissions: ["tabs"] };
-const MODE_POPUP = "popup";
-const MODE_SIDEBAR = "sidebar";
 
 // 获取DOM元素
-const sidebarModeCheckbox = document.getElementById("sidebarMode");
 const searchEnabledCheckbox = document.getElementById("searchEnabled");
 const tipsEnabledCheckbox = document.getElementById("tipsEnabled");
 const openInNewTabCheckbox = document.getElementById("openInNewTab");
@@ -29,10 +25,6 @@ const isZh = browserLanguage === "zh";
 const texts = {
   title: isZh ? "设置" : "Settings",
   backBtn: isZh ? "返回" : "Back",
-  displayModeTitle: isZh ? "侧边栏模式" : "Sidebar Mode",
-  displayModeDesc: isZh
-    ? "开启后点击图标打开侧边栏，关闭后打开弹窗。两者不会同时显示。"
-    : "When on, clicking the icon opens the sidebar; when off, it opens the popup. They are never shown at the same time.",
   searchFeatureTitle: isZh ? "启用搜索功能" : "Search Functionality",
   searchFeatureDesc: isZh
     ? "开启后可以使用搜索框搜索书签。"
@@ -60,8 +52,6 @@ const texts = {
 function applyI18n() {
   document.getElementById("title").textContent = texts.title;
   document.getElementById("backBtn").textContent = texts.backBtn;
-  document.getElementById("displayModeTitle").textContent = texts.displayModeTitle;
-  document.getElementById("displayModeDesc").textContent = texts.displayModeDesc;
   document.getElementById("searchFeatureTitle").textContent = texts.searchFeatureTitle;
   document.getElementById("searchFeatureDesc").textContent = texts.searchFeatureDesc;
   document.getElementById("tipsFeatureTitle").textContent = texts.tipsFeatureTitle;
@@ -110,13 +100,6 @@ function loadSettings() {
       })
       .catch(() => {});
   }
-
-  // 显示模式：默认 popup
-  if (typeof chrome !== "undefined" && chrome.storage?.local) {
-    chrome.storage.local.get(DISPLAY_MODE_KEY, (result) => {
-      sidebarModeCheckbox.checked = result?.[DISPLAY_MODE_KEY] === MODE_SIDEBAR;
-    });
-  }
 }
 
 // 保存设置
@@ -125,20 +108,6 @@ function saveSettings() {
   localStorage.setItem(SETTINGS_KEYS.TIPS_ENABLED, tipsEnabledCheckbox.checked.toString());
   localStorage.setItem(SETTINGS_KEYS.OPEN_IN_NEW_TAB, openInNewTabCheckbox.checked.toString());
   localStorage.setItem(SETTINGS_KEYS.KEEP_PANEL_OPEN, keepPanelOpenCheckbox.checked.toString());
-}
-
-// 通过 service worker 更新显示模式，确保 popup 与 sidebar 互斥
-function saveDisplayMode() {
-  const nextMode = sidebarModeCheckbox.checked ? MODE_SIDEBAR : MODE_POPUP;
-  try {
-    chrome.runtime.sendMessage({
-      type: "MAPLE_SET_MODE",
-      mode: nextMode,
-      openImmediately: false,
-    });
-  } catch (error) {
-    console.error("Failed to update display mode:", error);
-  }
 }
 
 // 授权请求必须在用户点击的同一个事件里直接发起
@@ -167,7 +136,6 @@ function goBack() {
 document.addEventListener("DOMContentLoaded", loadSettings);
 
 // 事件监听器
-sidebarModeCheckbox.addEventListener("change", saveDisplayMode);
 searchEnabledCheckbox.addEventListener("change", saveSettings);
 tipsEnabledCheckbox.addEventListener("change", saveSettings);
 openInNewTabCheckbox.addEventListener("change", saveSettings);

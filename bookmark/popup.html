@@ -1,132 +1,148 @@
 <!doctype html>
-<html style="width: 408px; min-width: 408px; max-width: 408px; height: 520px; min-height: 520px; max-height: 520px;">
+<html style="width: 288px; min-width: 288px; max-width: 288px; height: 600px; min-height: 600px; max-height: 600px;">
   <head>
     <meta charset="UTF-8" />
     <title>Maple Bookmarks</title>
-    <script src="height-init.js"></script>
-    <link rel="stylesheet" href="theme.css" />
+    <!-- 尺寸样式放在外部资源之前，Chrome 首次绘制时就能确定弹窗大小。 -->
     <style>
-      html {
-        width: 408px;
-        min-width: 408px;
-        max-width: 408px;
-        height: 520px;
-        min-height: 520px;
-        max-height: 520px;
+      html,
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 288px;
+        min-width: 288px;
+        max-width: 288px;
+        height: 600px;
+        min-height: 600px;
+        max-height: 600px;
+        overflow: hidden;
+        background: #f8f8f8;
+        box-sizing: border-box;
       }
 
       body {
-        margin: 0;
-        padding: 8px 0 12px 14px;
-        width: 408px;
-        min-width: 408px;
-        max-width: 408px;
-        height: 520px;
-        min-height: 520px;
-        max-height: 520px;
-        box-sizing: border-box;
+        visibility: hidden;
+      }
+
+      #popup-root {
+        position: relative;
+        width: 288px;
+        min-width: 288px;
+        max-width: 288px;
+        height: 600px;
+        min-height: 600px;
+        max-height: 600px;
+        padding: 40px 8px 8px;
         overflow-x: hidden;
-        overflow-y: auto;
+        overflow-y: scroll;
+        scrollbar-gutter: stable;
+        background: #f8f8f8;
+        box-sizing: border-box;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        html,
+        body,
+        #popup-root {
+          background: #181818;
+        }
       }
 
       #header {
-        width: 380px;
+        width: 100%;
       }
 
       .search-action {
-        width: 384px;
+        width: 100%;
       }
 
       #bookmarks {
         min-height: 360px;
       }
     </style>
+    <link rel="stylesheet" href="theme.css" />
   </head>
   <body
     class="popup-loading"
-    style="width: 408px; min-width: 408px; max-width: 408px; height: 520px; min-height: 520px; max-height: 520px;"
+    style="width: 288px; min-width: 288px; max-width: 288px; height: 600px; min-height: 600px; max-height: 600px;"
   >
-    <div class="settings-wrapper">
-      <button class="mode-btn" id="modeBtn" type="button" title=""></button>
-      <button class="settings-btn" id="settingsBtn" type="button" title=""><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-    </div>
-    <div id="hot-area"></div>
-    <div id="notification-container"></div>
-    <div id="search-wrapper">
-      <div id="header">
-        <input id="searchInput" type="text" placeholder="Search..." />
+    <div id="popup-root">
+      <div class="settings-wrapper">
+        <button class="tree-action-btn" type="button" id="collapseAllBtn" title="" aria-label="">⊟</button>
+        <button class="tree-action-btn" type="button" id="expandAllBtn" title="" aria-label="">⊞</button>
+        <button class="settings-btn" id="settingsBtn" type="button" title=""><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
       </div>
-      <div id="best-match"></div>
-      <div class="search-action">
-        <i class="arrow"></i>
-      </div>
-    </div>
-    <div id="bookmarks">
-      <div class="loading-state" data-loading="true" aria-label="Loading bookmarks">
-        <div class="loading-title"></div>
-        <div class="loading-grid">
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
-          <div class="loading-card"></div>
+      <div id="hot-area"></div>
+      <div id="notification-container"></div>
+      <div id="search-wrapper">
+        <div id="header">
+          <input id="searchInput" type="text" placeholder="Search..." />
+        </div>
+        <div id="best-match"></div>
+        <div class="search-action">
+          <i class="arrow"></i>
         </div>
       </div>
-    </div>
-    <div id="settings-overlay" class="settings-overlay" hidden>
-      <div class="settings-overlay-header">
-        <button class="settings-overlay-back" id="settingsOverlayBack" aria-label="Back">←</button>
-        <h3 class="settings-overlay-title" id="settingsOverlayTitle">Settings</h3>
-      </div>
-      <div class="settings-overlay-body">
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name" data-setting-key="display-mode-title">Sidebar Mode</div>
-            <div class="setting-desc" data-setting-key="display-mode-desc">When on, clicking the icon opens the sidebar; when off, it opens the popup.</div>
+      <div id="bookmarks">
+        <div class="loading-state" data-loading="true" aria-label="Loading bookmarks">
+          <div class="loading-title"></div>
+          <div class="loading-grid">
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
+            <div class="loading-card"></div>
           </div>
-          <label class="maple-switch"><input type="checkbox" id="overlaySidebarMode" /><span class="maple-switch-slider"></span></label>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name" data-setting-key="search-title">Search</div>
-            <div class="setting-desc" data-setting-key="search-desc">Show search box to quickly find bookmarks.</div>
-          </div>
-          <label class="maple-switch"><input type="checkbox" id="overlaySearchEnabled" /><span class="maple-switch-slider"></span></label>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name" data-setting-key="tips-title">Hover Tooltips</div>
-            <div class="setting-desc" data-setting-key="tips-desc">Show full bookmark titles on hover.</div>
-          </div>
-          <label class="maple-switch"><input type="checkbox" id="overlayTipsEnabled" /><span class="maple-switch-slider"></span></label>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name" data-setting-key="newtab-title">Open in New Tab</div>
-            <div class="setting-desc" data-setting-key="newtab-desc">Open bookmarks in a new tab vs the current one.</div>
-          </div>
-          <label class="maple-switch"><input type="checkbox" id="overlayOpenInNewTab" /><span class="maple-switch-slider"></span></label>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name" data-setting-key="keep-title">Keep Panel Open</div>
-            <div class="setting-desc" data-setting-key="keep-desc">Open in background tabs to keep the panel visible.</div>
-          </div>
-          <label class="maple-switch"><input type="checkbox" id="overlayKeepPanelOpen" /><span class="maple-switch-slider"></span></label>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name" data-setting-key="dedupe-title">Merge Duplicate Tabs</div>
-            <div class="setting-desc" data-setting-key="dedupe-desc">Opening a page that is already open switches to that tab instead of adding another, and existing duplicates close automatically. Only exact URL matches count, and pinned or grouped tabs are left alone. Asks to read your tabs when turned on.</div>
-          </div>
-          <label class="maple-switch"><input type="checkbox" id="overlayDedupeTabs" /><span class="maple-switch-slider"></span></label>
         </div>
       </div>
-      <div class="settings-overlay-footer">Maple Bookmarks v2.2</div>
+      <div id="settings-overlay" class="settings-overlay" hidden>
+        <div class="settings-overlay-header">
+          <button class="settings-overlay-back" id="settingsOverlayBack">Back</button>
+          <h3 class="settings-overlay-title" id="settingsOverlayTitle">Settings</h3>
+        </div>
+        <div class="settings-overlay-body">
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name" data-setting-key="search-title">Search</div>
+              <div class="setting-desc" data-setting-key="search-desc">Show search box to quickly find bookmarks.</div>
+            </div>
+            <label class="maple-switch"><input type="checkbox" id="overlaySearchEnabled" /><span class="maple-switch-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name" data-setting-key="tips-title">Hover Tooltips</div>
+              <div class="setting-desc" data-setting-key="tips-desc">Show full bookmark titles on hover.</div>
+            </div>
+            <label class="maple-switch"><input type="checkbox" id="overlayTipsEnabled" /><span class="maple-switch-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name" data-setting-key="newtab-title">Open in New Tab</div>
+              <div class="setting-desc" data-setting-key="newtab-desc">Open bookmarks in a new tab vs the current one.</div>
+            </div>
+            <label class="maple-switch"><input type="checkbox" id="overlayOpenInNewTab" /><span class="maple-switch-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name" data-setting-key="keep-title">Keep Panel Open</div>
+              <div class="setting-desc" data-setting-key="keep-desc">Open in background tabs to keep the panel visible.</div>
+            </div>
+            <label class="maple-switch"><input type="checkbox" id="overlayKeepPanelOpen" /><span class="maple-switch-slider"></span></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name" data-setting-key="dedupe-title">Merge Duplicate Tabs</div>
+              <div class="setting-desc" data-setting-key="dedupe-desc">Opening a page that is already open switches to that tab instead of adding another, and existing duplicates close automatically. Only exact URL matches count, and pinned or grouped tabs are left alone. Asks to read your tabs when turned on.</div>
+            </div>
+            <label class="maple-switch"><input type="checkbox" id="overlayDedupeTabs" /><span class="maple-switch-slider"></span></label>
+          </div>
+        </div>
+        <div class="settings-overlay-footer">Maple Bookmarks v2.2</div>
+      </div>
     </div>
     <script type="module" src="popup.js"></script>
   </body>

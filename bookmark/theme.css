@@ -1,478 +1,515 @@
-/* Maple Bookmarks — shared visual theme.
-   Layout-specific rules (fixed vs responsive) live in each HTML's inline <style>. */
+/* Maple Bookmarks — compact explorer-style popup tree. */
 
 :root {
-  --maple-bg: #ffffff;
-  --maple-card: #f4f3f0;
-  --maple-card-hover: #ecebe7;
-  --maple-card-active: #e3e1dc;
-  --maple-text: #363433;
-  --maple-text-secondary: #6b6863;
-  --maple-switch-off: #d9d7d2;
-  --maple-switch-on: #44b392;
-  --maple-float-bg: rgba(30, 29, 27, 0.94);
-  --maple-float-text: #f4f3f0;
-  --maple-float-shadow: 0 8px 16px rgba(0, 0, 0, 0.18);
-  --maple-radius: 8px;
-  --maple-radius-sm: 6px;
-  --maple-fast: 0.12s ease-out;
-  --maple-slow: 0.25s ease-out;
+  color-scheme: light dark;
+  --maple-bg: #f8f8f8;
+  --maple-surface: #ffffff;
+  --maple-hover: #e8e8e8;
+  --maple-active: #dbeafe;
+  --maple-text: #202020;
+  --maple-text-secondary: #616161;
+  --maple-text-muted: #8a8a8a;
+  --maple-accent: #c4473a;
+  --maple-focus: #007acc;
+  --maple-border: #d6d6d6;
+  --maple-guide: #d8d8d8;
+  --maple-font: "Maple Mono Normal NF CN", "Maple Mono NF CN", "Maple Mono", monospace;
+  --tree-row-height: 24px;
 }
 
 @media (prefers-color-scheme: dark) {
+  .favicon-dark { filter: invert(1); }
+
   :root {
-    --maple-bg: #1e1d1b;
-    --maple-card: #2a2926;
-    --maple-card-hover: #34322f;
-    --maple-card-active: #3e3c38;
-    --maple-text: #edece9;
-    --maple-text-secondary: #a9a6a0;
-    --maple-switch-off: #4a4844;
-    --maple-float-bg: rgba(244, 243, 240, 0.94);
-    --maple-float-text: #1e1d1b;
+    --maple-bg: #181818;
+    --maple-surface: #1f1f1f;
+    --maple-hover: #2a2d2e;
+    --maple-active: #37373d;
+    --maple-text: #cccccc;
+    --maple-text-secondary: #a7a7a7;
+    --maple-text-muted: #777777;
+    --maple-accent: #e06c5f;
+    --maple-focus: #007fd4;
+    --maple-border: #313131;
+    --maple-guide: #404040;
   }
 }
 
+* { box-sizing: border-box; }
+
+body,
+button,
+input { font-family: var(--maple-font); }
+
 body {
+  visibility: visible;
   background: var(--maple-bg);
   color: var(--maple-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Helvetica Neue", Roboto, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-body::-webkit-scrollbar {
-  display: none;
+#popup-root::-webkit-scrollbar,
+.settings-overlay-body::-webkit-scrollbar { width: 8px; }
+
+#popup-root::-webkit-scrollbar-thumb,
+.settings-overlay-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--maple-text-muted) 45%, transparent);
 }
 
-#hot-area {
-  position: absolute;
-  top: 0;
-  left: 20%;
-  width: 70%;
-  height: 40px;
-  z-index: 100;
-  cursor: pointer;
-}
+#hot-area,
+.search-action { display: none !important; }
 
-/* Floating tooltip at the bottom centre, fades in place */
 #notification-container {
   position: fixed;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
   z-index: 250;
-  pointer-events: none;
-  max-width: calc(100% - 28px);
-  padding: 8px 14px;
-  background: var(--maple-float-bg);
-  color: var(--maple-float-text);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
-  border-radius: 999px;
-  box-shadow: var(--maple-float-shadow);
-  transition: opacity var(--maple-fast);
-  white-space: nowrap;
+  padding: 7px 10px;
   overflow: hidden;
+  color: var(--maple-text);
+  font-size: 11px;
+  line-height: 16px;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--maple-surface);
+  border: 1px solid var(--maple-border);
+  border-left: 2px solid var(--maple-accent);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 22%);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 140ms ease, transform 140ms ease;
 }
 
 #notification-container.show {
   opacity: 1;
+  transform: translateY(0);
 }
 
-.folder {
+#search-wrapper {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+#search-wrapper.show {
+  height: auto;
+  margin-top: 0;
+  transform: none;
+}
+
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  background: transparent;
+}
+
+#searchInput {
   width: 100%;
-}
-
-h2 {
-  padding-left: 4px;
-  font-weight: 600;
-  color: var(--maple-text-secondary);
-  line-height: 1;
-  margin-block-end: 12px;
-  margin-block-start: 18px;
-  user-select: none;
+  height: 26px;
+  padding: 3px 7px 4px;
+  color: var(--maple-text);
   font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: left;
+  caret-color: var(--maple-accent);
+  background: var(--maple-surface);
+  border: 1px solid var(--maple-border);
+  border-radius: 2px;
+  outline: none;
 }
 
-.folderTitle.collapsible-folder {
+#searchInput::placeholder { color: var(--maple-text-muted); }
+
+#searchInput:focus {
+  border-color: var(--maple-focus);
+  outline: 1px solid var(--maple-focus);
+  outline-offset: -1px;
+}
+
+#bookmarks { padding-bottom: 4px; }
+
+.folder,
+.childContainer { width: 100%; }
+
+.childContainer {
+  position: relative;
+  display: block;
+}
+
+/* A quiet guide per level makes the browser bookmark hierarchy readable at a glance. */
+.folder > .childContainer {
+  width: calc(100% - 9px);
+  margin-left: 9px;
+  padding-left: 8px;
+  border-left: 1px solid transparent;
+}
+
+.folder-root > .childContainer {
+  width: 100%;
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.folder:hover > .childContainer { border-left-color: var(--maple-guide); }
+
+.folderTitle {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  /* 面板右侧没有内边距，右边多留 14px，长标题的箭头才不会超出卡片 */
-  padding: 6px 18px 6px 4px;
-  margin-block-end: 8px;
-  margin-block-start: 12px;
-  transition: color var(--maple-fast);
+  min-width: 0;
+  height: var(--tree-row-height);
+  margin: 0;
+  padding: 0 6px 0 19px;
+  color: var(--maple-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: var(--tree-row-height);
+  letter-spacing: 0;
+  text-transform: none;
+  user-select: none;
+  border-radius: 2px;
 }
 
 .folderTitle.collapsible-folder:hover {
   color: var(--maple-text);
+  background: var(--maple-hover);
 }
 
-/* 箭头紧跟在标题后面，不铺整行底色 */
+.folderTitle.collapsible-folder:focus-visible {
+  outline: 1px solid var(--maple-focus);
+  outline-offset: -1px;
+}
+
 .folderTitle .folder-arrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity var(--maple-fast);
-}
-
-/* 折叠箭头只在指向标题时出现，收起的分组一直显示，好看出它是收起的 */
-.folderTitle:hover .folder-arrow,
-.folderTitle:focus-visible .folder-arrow,
-.folderTitle.collapsed .folder-arrow {
-  opacity: 1;
+  position: absolute;
+  top: 0;
+  left: 3px;
+  display: grid;
+  width: 16px;
+  height: var(--tree-row-height);
+  place-items: center;
 }
 
 .folderTitle .folder-arrow::before {
+  width: 0;
+  height: 0;
   content: "";
-  display: block;
-  width: 6px;
-  height: 6px;
-  border: solid var(--maple-text-secondary);
-  border-width: 0 1.5px 1.5px 0;
-  transform: rotate(-45deg);
-  transition: transform var(--maple-slow);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--maple-text-secondary);
+  transform: rotate(0deg);
+  transform-origin: 2px 4px;
+  transition: transform 100ms ease;
 }
 
-.folderTitle.collapsible-folder.expanded .folder-arrow::before {
-  transform: rotate(45deg);
-}
+.folderTitle.expanded .folder-arrow::before { transform: rotate(90deg); }
 
 .folderTitle .folder-label {
-  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
+  line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-p.message {
-  color: var(--maple-text-secondary);
-  text-align: center;
-  font-weight: 400;
-  font-size: 15px;
-  line-height: 1.6;
-  padding: 40px 20px;
+.top-level-sortable > .folderTitle,
+.folder-root > .childContainer > .top-level-sortable.bookmark {
+  padding-right: 24px;
 }
 
-.loading-state {
-  width: 100%;
-  box-sizing: border-box;
+.top-level-sortable > .folderTitle,
+.folder-root > .childContainer > .top-level-sortable.bookmark {
+  cursor: pointer;
 }
 
-body.popup-loading #search-wrapper,
-body.popup-loading #hot-area,
-body.popup-loading #notification-container,
-body.popup-loading .settings-wrapper {
-  visibility: hidden;
+.top-level-sortable > .folderTitle::after,
+.folder-root > .childContainer > .top-level-sortable.bookmark::after {
+  position: absolute;
+  right: 5px;
+  width: 9px;
+  height: 14px;
+  content: "";
+  background-image: radial-gradient(circle, var(--maple-text-muted) 1px, transparent 1.5px);
+  background-size: 4px 4px;
+  background-position: 0 1px;
+  opacity: 0;
+  transition: opacity 100ms ease;
 }
 
-.loading-title {
-  width: 80px;
-  height: 12px;
-  border-radius: 6px;
-  background: var(--maple-card);
-  margin: 14px 0 12px 4px;
+.top-level-sortable > .folderTitle:hover::after,
+.top-level-sortable > .folderTitle:focus-visible::after,
+.folder-root > .childContainer > .top-level-sortable.bookmark:hover::after,
+.folder-root > .childContainer > .top-level-sortable.bookmark:focus-visible::after {
+  opacity: 0.65;
 }
 
-.loading-grid {
-  display: flex;
-  flex-wrap: wrap;
+.top-level-sortable.dragging {
+  opacity: 0.42;
 }
 
-.loading-card {
-  width: 120px;
-  height: 44px;
-  box-sizing: border-box;
-  border-radius: var(--maple-radius);
-  background: var(--maple-card);
-  margin-bottom: 10px;
-  margin-right: 10px;
+.top-level-sortable.drag-before > .folderTitle,
+.folder-root > .childContainer > .top-level-sortable.bookmark.drag-before {
+  box-shadow: inset 0 2px 0 var(--maple-focus);
 }
 
-.childContainer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+.top-level-sortable.drag-after > .folderTitle,
+.folder-root > .childContainer > .top-level-sortable.bookmark.drag-after {
+  box-shadow: inset 0 -2px 0 var(--maple-focus);
 }
 
-#search-wrapper {
-  margin-bottom: 14px;
+.bookmark { min-width: 0; }
+
+.childContainer > .bookmark {
   position: relative;
-  margin-top: 0;
-  transform: translateY(0);
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--tree-row-height);
+  margin: 0;
+  padding: 0 6px 0 4px;
+  color: var(--maple-text);
+  text-align: left;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: none;
 }
 
-#search-wrapper.show {
-  transform: translateY(0);
-  margin-top: 0;
-  height: auto;
-}
+.childContainer > .bookmark:hover { background: var(--maple-hover); }
 
-/* 搜索框常驻显示，不再需要展开箭头和热区 */
-.search-action,
-#hot-area {
-  display: none !important;
+.childContainer > .bookmark:focus-visible {
+  outline: 1px solid var(--maple-focus);
+  outline-offset: -1px;
 }
 
 #best-match .bookmark.active {
-  background: var(--maple-card-active);
+  background: var(--maple-active);
+  outline: 1px solid color-mix(in srgb, var(--maple-focus) 55%, transparent);
+  outline-offset: -1px;
+}
+
+.bookmark p {
+  min-width: 0;
+  margin: 0 0 0 6px;
+  padding: 1px 0 2px;
+  overflow: hidden;
+  color: var(--maple-text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favicon {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 16px;
+  object-fit: contain;
 }
 
 .best-match-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-block-start: 18px;
-  margin-block-end: 12px;
+  height: 24px;
+  margin: 4px 0 2px;
+  padding-left: 4px;
+  border-bottom: 1px solid var(--maple-border);
 }
 
 .best-match-header h2 {
-  margin: 0;
   flex: 1;
+  margin: 0;
+  color: var(--maple-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .best-match-clear {
-  background: transparent;
-  border: none;
-  color: var(--maple-text-secondary);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  flex-shrink: 0;
-  transition:
-    background-color var(--maple-fast),
-    color var(--maple-fast);
+  color: var(--maple-text-secondary);
+  font-size: 16px;
+  line-height: 20px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  place-items: center;
 }
 
 .best-match-clear:hover,
 .best-match-clear:focus-visible {
-  background: var(--maple-card);
   color: var(--maple-text);
+  background: var(--maple-hover);
   outline: none;
-}
-
-.childContainer > .bookmark {
-  width: 120px;
-  height: 44px;
-  box-sizing: border-box;
-  border-radius: var(--maple-radius);
-  background-color: var(--maple-card);
-  padding: 6px 12px;
-  margin-bottom: 10px;
-  margin-right: 10px;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  text-decoration: none;
-  transition: background-color var(--maple-fast);
-}
-
-.childContainer > .bookmark:hover {
-  background-color: var(--maple-card-hover);
-}
-
-.bookmark p {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--maple-text);
-  margin-left: 9px;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.favicon {
-  height: 18px;
-  width: 18px;
-  margin-left: 2px;
-  flex-shrink: 0;
-}
-
-@media (prefers-color-scheme: dark) {
-  .favicon-dark {
-    filter: invert(1);
-  }
-}
-
-#header {
-  margin-bottom: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  background-color: transparent;
-}
-
-#searchInput {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0 16px;
-  font-size: 15px;
-  height: 40px;
-  line-height: 20px;
-  color: var(--maple-text);
-  outline: none;
-  caret-color: var(--maple-text);
-  background: var(--maple-card);
-  border-radius: var(--maple-radius);
-  text-align: center;
-  border: none;
-  font-weight: 500;
-}
-
-#searchInput::placeholder {
-  color: var(--maple-text-secondary);
-  font-weight: 400;
 }
 
 .settings-wrapper {
   position: absolute;
-  top: 8px;
-  right: 12px;
-  height: 28px;
+  top: 7px;
+  right: 8px;
+  z-index: 200;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  z-index: 200;
-  opacity: 0;
-  transition: opacity var(--maple-fast);
-}
-
-/* 右上角按钮平时隐藏，指针移到第一行或按钮上才出现，第一次打开会先显示一下 */
-.settings-wrapper:hover,
-.settings-wrapper:focus-within,
-.settings-wrapper.show-once,
-body:has([data-corner-row]:hover) .settings-wrapper {
-  opacity: 1;
+  height: 26px;
+  gap: 2px;
 }
 
 .settings-btn,
-.mode-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: var(--maple-radius-sm);
-  background-color: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--maple-text-secondary);
-  transition:
-    background-color var(--maple-fast),
-    color var(--maple-fast);
-  pointer-events: auto;
+.tree-action-btn {
+  display: grid;
+  width: 26px;
+  height: 26px;
   padding: 0;
+  color: var(--maple-text-secondary);
+  font-size: 13px;
+  line-height: 26px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  opacity: 0.82;
+  place-items: center;
+}
+
+.settings-btn { font-size: 14px; }
+
+.tree-action-btn {
+  font-size: 15px;
+}
+
+.tree-action-btn:nth-child(2) {
+  margin-right: 3px;
 }
 
 .settings-btn:hover,
-.mode-btn:hover,
+.tree-action-btn:hover,
 .settings-btn:focus-visible,
-.mode-btn:focus-visible {
-  background-color: var(--maple-card);
+.tree-action-btn:focus-visible {
   color: var(--maple-text);
+  background: var(--maple-hover);
+  opacity: 1;
   outline: none;
 }
 
-/* ======= Settings Overlay (popup + sidebar) ======= */
+.loading-state { width: 100%; }
+
+body.popup-loading #search-wrapper,
+body.popup-loading #hot-area,
+body.popup-loading #notification-container,
+body.popup-loading .settings-wrapper { visibility: hidden; }
+
+.loading-title,
+.loading-card {
+  background: var(--maple-hover);
+}
+
+.loading-title {
+  width: 92px;
+  height: 10px;
+  margin: 8px 4px;
+}
+
+.loading-grid { display: block; }
+
+.loading-card {
+  width: 100%;
+  height: 22px;
+  margin: 2px 0;
+  border-radius: 2px;
+}
+
+p.message {
+  padding: 36px 18px;
+  color: var(--maple-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+
 .settings-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--maple-bg);
+  inset: 0;
   z-index: 300;
   display: flex;
   flex-direction: column;
-  opacity: 0;
-  transition: opacity var(--maple-slow);
   overflow: hidden;
+  background: var(--maple-bg);
+  transform: translateX(100%);
+  transition: transform 180ms ease-out;
 }
 
-.settings-overlay[hidden] {
-  display: none;
-}
-
-.settings-overlay.open {
-  opacity: 1;
-}
+.settings-overlay[hidden] { display: none; }
+.settings-overlay.open { transform: translateX(0); }
 
 .settings-overlay-header {
   display: flex;
   align-items: center;
-  padding: 12px 14px 4px;
-  background: var(--maple-bg);
-  flex-shrink: 0;
+  min-height: 38px;
+  padding: 5px 8px;
+  background: var(--maple-surface);
+  border-bottom: 1px solid var(--maple-border);
 }
 
 .settings-overlay-back {
-  background: transparent;
-  border: none;
-  border-radius: var(--maple-radius-sm);
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  display: grid;
+  min-width: 40px;
+  height: 26px;
+  padding: 0 4px;
   color: var(--maple-text-secondary);
-  transition:
-    background-color var(--maple-fast),
-    color var(--maple-fast);
-  font-size: 15px;
-  padding: 0;
-  flex-shrink: 0;
+  font-size: 14px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  place-items: center;
 }
 
-.settings-overlay-back:hover {
-  background: var(--maple-card);
+.settings-overlay-back:hover,
+.settings-overlay-back:focus-visible {
   color: var(--maple-text);
+  background: var(--maple-hover);
+  outline: none;
 }
 
 .settings-overlay-title {
   flex: 1;
-  text-align: center;
-  font-size: 15px;
-  font-weight: 600;
+  margin: 0 40px 0 0;
   color: var(--maple-text);
-  margin: 0;
-  margin-right: 28px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
 }
 
 .settings-overlay-body {
   flex: 1;
-  padding: 4px 16px 16px;
+  padding: 6px 10px;
   overflow-y: auto;
-}
-
-.settings-overlay-body::-webkit-scrollbar {
-  display: none;
 }
 
 .setting-row {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 0;
+  min-height: 52px;
+  padding: 8px 4px;
+  gap: 12px;
+  border-bottom: 1px solid var(--maple-border);
 }
 
 .setting-info {
@@ -481,70 +518,78 @@ body:has([data-corner-row]:hover) .settings-wrapper {
 }
 
 .setting-name {
-  font-size: 13px;
-  font-weight: 600;
+  margin-bottom: 2px;
   color: var(--maple-text);
-  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
 }
 
 .setting-desc {
-  font-size: 12px;
   color: var(--maple-text-secondary);
-  line-height: 1.5;
+  font-size: 10px;
+  line-height: 15px;
 }
 
 .maple-switch {
   position: relative;
   display: inline-block;
-  width: 38px;
-  height: 22px;
-  flex-shrink: 0;
+  width: 32px;
+  height: 18px;
+  flex: 0 0 32px;
 }
 
 .maple-switch input {
-  opacity: 0;
   width: 0;
   height: 0;
+  opacity: 0;
 }
 
 .maple-switch-slider {
   position: absolute;
-  cursor: pointer;
   inset: 0;
-  background: var(--maple-switch-off);
-  transition: background-color var(--maple-fast);
-  border-radius: 22px;
+  cursor: pointer;
+  background: var(--maple-text-muted);
+  border-radius: 9px;
+  transition: background 140ms ease;
 }
 
-.maple-switch-slider:before {
+.maple-switch-slider::before {
   position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 2px;
   bottom: 2px;
-  background: #fff;
-  transition: transform var(--maple-fast);
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  content: "";
+  background: #ffffff;
   border-radius: 50%;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+  transition: transform 140ms ease;
 }
 
-.maple-switch input:checked + .maple-switch-slider {
-  background: var(--maple-switch-on);
-}
-
-.maple-switch input:checked + .maple-switch-slider:before {
-  transform: translateX(16px);
-}
+.maple-switch input:checked + .maple-switch-slider { background: var(--maple-focus); }
+.maple-switch input:checked + .maple-switch-slider::before { transform: translateX(14px); }
 
 .maple-switch input:focus-visible + .maple-switch-slider {
-  outline: 2px solid var(--maple-text-secondary);
+  outline: 1px solid var(--maple-focus);
   outline-offset: 2px;
 }
 
 .settings-overlay-footer {
-  padding: 12px 16px 16px;
+  padding: 8px 12px 10px;
+  color: var(--maple-text-muted);
+  font-size: 10px;
+  line-height: 16px;
   text-align: center;
-  font-size: 12px;
-  color: var(--maple-text-secondary);
-  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

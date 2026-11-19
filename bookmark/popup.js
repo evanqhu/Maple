@@ -1,6 +1,6 @@
 import Fuse from "./lib/fuse.js";
 import { debounce } from "./utils/debounce.js";
-import { keyText, BestMatchTitle, LastBestMatch, BestMatch, EmptyBookmarkMessage } from "./utils/i18n.js";
+import { keyText, BestMatchTitle, BestMatch, EmptyBookmarkMessage } from "./utils/i18n.js";
 import { Notification } from "./utils/notification.js";
 import { createElement } from "./utils/element.js";
 import { getFavicon, markDarkFavicon } from "./utils/favicon.js";
@@ -22,31 +22,7 @@ const SETTINGS_KEYS = {
 };
 
 const HAS_SEEN_SETTINGS_HINT_KEY = "MAPLE_SETTINGS_HINT_SEEN";
-const FIXED_POPUP_WIDTH = 408;
-const FIXED_POPUP_HEIGHT = 520;
-// MV3 CSP inline script'leri engelliyor; modu URL pathname'den tespit ediyoruz
-const IS_SIDEBAR_MODE = typeof location !== "undefined" && /sidebar\.html$/.test(location.pathname || "");
-
-function applyFixedPopupSize() {
-  if (IS_SIDEBAR_MODE) return;
-  document.documentElement.style.width = `${FIXED_POPUP_WIDTH}px`;
-  document.documentElement.style.minWidth = `${FIXED_POPUP_WIDTH}px`;
-  document.documentElement.style.maxWidth = `${FIXED_POPUP_WIDTH}px`;
-  document.documentElement.style.height = `${FIXED_POPUP_HEIGHT}px`;
-  document.documentElement.style.minHeight = `${FIXED_POPUP_HEIGHT}px`;
-  document.documentElement.style.maxHeight = `${FIXED_POPUP_HEIGHT}px`;
-
-  if (document.body) {
-    document.body.style.width = `${FIXED_POPUP_WIDTH}px`;
-    document.body.style.minWidth = `${FIXED_POPUP_WIDTH}px`;
-    document.body.style.maxWidth = `${FIXED_POPUP_WIDTH}px`;
-    document.body.style.height = `${FIXED_POPUP_HEIGHT}px`;
-    document.body.style.minHeight = `${FIXED_POPUP_HEIGHT}px`;
-    document.body.style.maxHeight = `${FIXED_POPUP_HEIGHT}px`;
-  }
-}
-
-applyFixedPopupSize();
+const TOP_LEVEL_ORDER_KEY = "MAPLE_TOP_LEVEL_ORDER";
 
 // 获取搜索功能开启状态
 function isSearchEnabled() {
@@ -93,44 +69,59 @@ const CLASS_NAMES = {
   folderTitle: "folderTitle",
 };
 
-let folderCount;
-
 let searchInput = document.getElementById("searchInput");
 let hotArea = document.querySelector("#hot-area");
 let settingsBtn = document.getElementById("settingsBtn");
 let settingsWrapper = document.querySelector(".settings-wrapper");
-let modeBtn = document.getElementById("modeBtn");
+let collapseAllBtn = document.getElementById("collapseAllBtn");
+let expandAllBtn = document.getElementById("expandAllBtn");
 
 let activeBestMatchIndex = 0;
 let hideTimeout = null;
-// Search açıkken hem popup hem sidebar'da hep görünür olsun
+// Search açıkken popup'ta hep görünür olsun
 let searchIsHide = !isSearchEnabled();
 
 let bestMatches = [];
-// 延迟恢复 header 元素，避免阻塞初始渲染
-setTimeout(() => {
-  if (isSearchEnabled()) {
-    const persistedHeader = localStorage.getItem("persistedHeader");
-    if (persistedHeader) {
-      try {
-        updateHeader(JSON.parse(persistedHeader), true);
-        updateActiveBestMatch(activeBestMatchIndex);
-      } catch {
-        // 忽略解析错误
-      }
-    }
-  }
-}, 0);
+localStorage.removeItem("persistedHeader");
 
 const isZhUI = navigator.language.startsWith("zh");
 
-// Settings overlay: pop-up + sidebar içinde overlay olarak ayarlar paneli
+function setAllFoldersExpanded(expanded) {
+  document.querySelectorAll("#bookmarks .folderTitle.collapsible-folder").forEach((folderTitle) => {
+    const childContainer = folderTitle.parentElement?.querySelector(":scope > .childContainer");
+    if (!childContainer) return;
+
+    childContainer.style.display = expanded ? "block" : "none";
+    folderTitle.classList.toggle("expanded", expanded);
+    folderTitle.classList.toggle("collapsed", !expanded);
+    folderTitle.setAttribute("aria-expanded", expanded.toString());
+
+    const folderStateKey = folderTitle.dataset.folderStateKey;
+    if (folderStateKey) {
+      localStorage.setItem(folderStateKey, expanded ? "expanded" : "collapsed");
+    }
+  });
+}
+
+if (collapseAllBtn) {
+  const label = isZhUI ? "折叠所有目录" : "Collapse all folders";
+  collapseAllBtn.title = label;
+  collapseAllBtn.setAttribute("aria-label", label);
+  collapseAllBtn.addEventListener("click", () => setAllFoldersExpanded(false));
+}
+
+if (expandAllBtn) {
+  const label = isZhUI ? "展开所有目录" : "Expand all folders";
+  expandAllBtn.title = label;
+  expandAllBtn.setAttribute("aria-label", label);
+  expandAllBtn.addEventListener("click", () => setAllFoldersExpanded(true));
+}
+
+// Settings overlay: popup içinde ayarlar paneli
 const SETTINGS_OVERLAY = {
   el: null,
-  bookmarksEl: null,
   init() {
     this.el = document.getElementById("settings-overlay");
-    this.bookmarksEl = document.getElementById("bookmarks");
     if (!this.el) return;
 
     // i18n metinler
@@ -138,8 +129,6 @@ const SETTINGS_OVERLAY = {
       ? {
           title: "设置",
           back: "返回",
-          "display-mode-title": "侧边栏模式",
-          "display-mode-desc": "开启后点击图标打开侧边栏，关闭后打开弹窗。",
           "search-title": "搜索",
           "search-desc": "显示搜索框以快速查找书签。",
           "tips-title": "悬停提示",
@@ -154,8 +143,6 @@ const SETTINGS_OVERLAY = {
       : {
           title: "Settings",
           back: "Back",
-          "display-mode-title": "Sidebar Mode",
-          "display-mode-desc": "When on, clicking the icon opens the sidebar; when off, it opens the popup.",
           "search-title": "Search",
           "search-desc": "Show search box to quickly find bookmarks.",
           "tips-title": "Hover Tooltips",
@@ -171,7 +158,7 @@ const SETTINGS_OVERLAY = {
     const titleEl = document.getElementById("settingsOverlayTitle");
     if (titleEl) titleEl.textContent = i18n.title;
     const backEl = document.getElementById("settingsOverlayBack");
-    if (backEl) backEl.setAttribute("aria-label", i18n.back);
+    if (backEl) backEl.textContent = i18n.back;
     this.el.querySelectorAll("[data-setting-key]").forEach((node) => {
       const key = node.getAttribute("data-setting-key");
       if (i18n[key]) node.textContent = i18n[key];
@@ -179,34 +166,12 @@ const SETTINGS_OVERLAY = {
 
     if (backEl) backEl.addEventListener("click", () => this.close());
 
-    const sidebar = document.getElementById("overlaySidebarMode");
     const search = document.getElementById("overlaySearchEnabled");
     const tips = document.getElementById("overlayTipsEnabled");
     const newtab = document.getElementById("overlayOpenInNewTab");
     const keep = document.getElementById("overlayKeepPanelOpen");
     const dedupe = document.getElementById("overlayDedupeTabs");
 
-    if (sidebar) {
-      sidebar.addEventListener("change", () => {
-        const desiredSidebar = sidebar.checked;
-        // Eğer hedef zaten mevcut moddaysa hiçbir şey yapma
-        if (desiredSidebar === IS_SIDEBAR_MODE) return;
-        // Mode-btn ile aynı flow'u tetikle (window.close + popup-window açma fallback'leriyle)
-        if (modeBtn) {
-          modeBtn.click();
-        } else {
-          try {
-            chrome.runtime.sendMessage({
-              type: "MAPLE_SET_MODE",
-              mode: desiredSidebar ? "sidebar" : "popup",
-              openImmediately: true,
-            });
-          } catch (err) {
-            console.error("Failed to update mode:", err);
-          }
-        }
-      });
-    }
     if (search) {
       search.addEventListener("change", () => {
         localStorage.setItem(SETTINGS_KEYS.SEARCH_ENABLED, search.checked.toString());
@@ -228,6 +193,7 @@ const SETTINGS_OVERLAY = {
         localStorage.setItem(SETTINGS_KEYS.KEEP_PANEL_OPEN, keep.checked.toString());
       });
     }
+
     if (dedupe) {
       dedupe.addEventListener("change", () => {
         if (dedupe.checked) {
@@ -244,7 +210,7 @@ const SETTINGS_OVERLAY = {
       });
     }
 
-    // ESC ile kapat
+    // 按 Escape 关闭设置
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && this.el && !this.el.hidden && this.el.classList.contains("open")) {
         e.preventDefault();
@@ -259,7 +225,6 @@ const SETTINGS_OVERLAY = {
     const tips = document.getElementById("overlayTipsEnabled");
     const newtab = document.getElementById("overlayOpenInNewTab");
     const keep = document.getElementById("overlayKeepPanelOpen");
-    const sidebar = document.getElementById("overlaySidebarMode");
     const dedupe = document.getElementById("overlayDedupeTabs");
 
     if (dedupe) {
@@ -274,18 +239,6 @@ const SETTINGS_OVERLAY = {
     if (tips) tips.checked = localStorage.getItem(SETTINGS_KEYS.TIPS_ENABLED) === "true";
     if (newtab) newtab.checked = localStorage.getItem(SETTINGS_KEYS.OPEN_IN_NEW_TAB) !== "false";
     if (keep) keep.checked = localStorage.getItem(SETTINGS_KEYS.KEEP_PANEL_OPEN) === "true";
-    if (sidebar) {
-      sidebar.checked = IS_SIDEBAR_MODE;
-      try {
-        chrome.storage?.local?.get?.("MAPLE_DISPLAY_MODE", (result) => {
-          if (result && typeof result.MAPLE_DISPLAY_MODE !== "undefined") {
-            sidebar.checked = result.MAPLE_DISPLAY_MODE === "sidebar";
-          }
-        });
-      } catch {
-        // ignore
-      }
-    }
 
     this.el.hidden = false;
     requestAnimationFrame(() => {
@@ -305,6 +258,7 @@ SETTINGS_OVERLAY.init();
 // Settings butonu artık ayrı bir sayfa açmıyor — overlay'i açıyor
 if (settingsBtn) {
   settingsBtn.title = isZhUI ? "设置" : "Settings";
+  settingsBtn.setAttribute("aria-label", settingsBtn.title);
 
   settingsBtn.addEventListener("click", function (e) {
     e.preventDefault();
@@ -316,128 +270,12 @@ if (settingsBtn) {
 }
 
 if (settingsWrapper && localStorage.getItem(HAS_SEEN_SETTINGS_HINT_KEY) !== "true") {
-  // 初次打开时短暂展示设置按钮，随后仅在悬停时显示
+  // 首次打开时标出设置入口
   settingsWrapper.classList.add("show-once");
   localStorage.setItem(HAS_SEEN_SETTINGS_HINT_KEY, "true");
   setTimeout(() => {
     settingsWrapper.classList.remove("show-once");
   }, 1800);
-}
-
-// 监听显示模式变化：如果当前面板与新模式不一致，则自动关闭，避免 popup 与 sidebar 同时显示
-if (typeof chrome !== "undefined" && chrome.storage?.onChanged) {
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !changes.MAPLE_DISPLAY_MODE) return;
-    const newMode = changes.MAPLE_DISPLAY_MODE.newValue;
-    const currentIsSidebar = IS_SIDEBAR_MODE;
-    const newIsSidebar = newMode === "sidebar";
-    if (currentIsSidebar !== newIsSidebar) {
-      window.close();
-    }
-  });
-}
-
-const ICON_SIDEBAR =
-  '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/></svg>';
-const ICON_POPUP =
-  '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M2 6.5h12"/></svg>';
-
-// 模式切换按钮：在 popup 与 sidebar 之间切换，确保两者不会同时存在
-if (modeBtn) {
-  const browserLang = navigator.language.startsWith("zh") ? "zh" : "en";
-  const isZhMode = browserLang === "zh";
-  modeBtn.title = IS_SIDEBAR_MODE
-    ? isZhMode
-      ? "切换到弹窗模式"
-      : "Switch to popup"
-    : isZhMode
-      ? "切换到侧边栏模式"
-      : "Switch to sidebar";
-  // 图标画的是切换后的样子：侧边栏里显示弹窗图标，弹窗里显示侧边栏图标
-  modeBtn.innerHTML = IS_SIDEBAR_MODE ? ICON_POPUP : ICON_SIDEBAR;
-
-  modeBtn.addEventListener("click", async function (e) {
-    e.preventDefault();
-    e.stopPropagation();
-    const nextMode = IS_SIDEBAR_MODE ? "popup" : "sidebar";
-
-    // Önce mod state'ini background'a yazmayı bekle (popup config'inin güncellenmesi için)
-    try {
-      await new Promise((resolve) => {
-        try {
-          chrome.runtime.sendMessage(
-            {
-              type: "MAPLE_SET_MODE",
-              mode: nextMode,
-              openImmediately: !IS_SIDEBAR_MODE, // popup→sidebar için background sidePanel.open çağırsın
-            },
-            () => resolve()
-          );
-        } catch {
-          resolve();
-        }
-      });
-    } catch {
-      // ignore
-    }
-
-    // Sidebar → popup geçişi: önce action.openPopup dene (toolbar'a yapışık, URL bar yok),
-    // başarısız olursa konumlu popup window aç
-    if (IS_SIDEBAR_MODE) {
-      let opened = false;
-      try {
-        if (chrome.action?.openPopup) {
-          await chrome.action.openPopup();
-          opened = true;
-        }
-      } catch (error) {
-        console.warn("chrome.action.openPopup failed, falling back to window:", error);
-      }
-
-      if (!opened) {
-        try {
-          if (chrome.windows?.create) {
-            const popupWidth = 420;
-            const popupHeight = 560;
-            // Mevcut tarayıcı penceresinin sağ üstüne yerleştir (toolbar ikonu yakınına)
-            let left;
-            let top;
-            try {
-              const currentWindow = await chrome.windows.getCurrent();
-              if (currentWindow) {
-                left = Math.max(0, (currentWindow.left || 0) + (currentWindow.width || 1200) - popupWidth - 24);
-                top = (currentWindow.top || 0) + 72;
-              }
-            } catch {
-              // ignore positioning errors
-            }
-            await chrome.windows.create({
-              url: chrome.runtime.getURL("popup.html"),
-              type: "popup",
-              width: popupWidth,
-              height: popupHeight,
-              focused: true,
-              ...(left !== undefined ? { left: Math.round(left) } : {}),
-              ...(top !== undefined ? { top: Math.round(top) } : {}),
-            });
-          } else if (typeof window !== "undefined" && window.open) {
-            window.open(chrome.runtime.getURL("popup.html"), "_blank", "popup,width=420,height=560");
-          }
-        } catch (error) {
-          console.error("Failed to open popup window from sidebar:", error);
-        }
-      }
-    }
-
-    // Mevcut paneli kapat
-    setTimeout(() => {
-      try {
-        window.close();
-      } catch {
-        // ignore
-      }
-    }, 80);
-  });
 }
 
 // 更新搜索功能显示状态
@@ -543,13 +381,6 @@ function getFuseInstance() {
 }
 
 /**
- * 智能更新popup高度
- */
-function updatePopupHeight() {
-  applyFixedPopupSize();
-}
-
-/**
  * @description 快速切换默认选中的最佳结果
  * @param index {number} 要选中的索引
  */
@@ -592,14 +423,7 @@ function showBestMatchTips() {
  * @param headerFuzeMatch {{ title: string, url: string, favicon: string }[]|null} 匹配到的 对象数组 或 null
  * @param init {boolean} 是否是初始化
  */
-function updateHeader(headerFuzeMatch, init = false) {
-  if (!headerFuzeMatch) {
-    return;
-  }
-  // 兼容旧版本，上一个版本 headerFuzeMatch 为单个对象
-  if (!Array.isArray(headerFuzeMatch)) {
-    headerFuzeMatch = Array.from(headerFuzeMatch);
-  }
+function updateHeader(headerFuzeMatch) {
   const matchedBookmark = document.querySelector("#best-match .folder");
   if (matchedBookmark) {
     matchedBookmark.parentElement.removeChild(matchedBookmark);
@@ -609,7 +433,7 @@ function updateHeader(headerFuzeMatch, init = false) {
 
   // Header row: title + clear button
   const headerRow = createElement("div", "best-match-header");
-  const title = createElement("h2", "", init ? LastBestMatch : BestMatch);
+  const title = createElement("h2", "", BestMatch);
   title.title = BestMatchTitle;
   headerRow.appendChild(title);
 
@@ -631,13 +455,11 @@ function updateHeader(headerFuzeMatch, init = false) {
   bestMatchFolder.appendChild(childContainer);
   bestMatches = headerFuzeMatch;
 
-  localStorage.setItem("persistedHeader", JSON.stringify(headerFuzeMatch));
   document.querySelector("#best-match").appendChild(bestMatchFolder);
   updateActiveBestMatch(0);
 }
 
 function clearBestMatches() {
-  localStorage.removeItem("persistedHeader");
   const bestMatchContainer = document.querySelector("#best-match");
   if (bestMatchContainer) bestMatchContainer.innerHTML = "";
   bestMatches = [];
@@ -661,7 +483,13 @@ function checkOverflow(el) {
   return isOverflowing;
 }
 
-// Search input: cached Fuse + tek geçişli filtreleme (her keystroke'ta tek Fuse search)
+function resetSearchResults({ folders, items }) {
+  for (const item of items) item.el.style.display = "flex";
+  for (const folder of folders) folder.style.display = "block";
+  clearBestMatches();
+}
+
+// 每次输入只进行一次 Fuse 检索，并复用同一份 DOM 缓存。
 if (isSearchEnabled()) {
   searchInput.addEventListener(
     "input",
@@ -672,11 +500,7 @@ if (isSearchEnabled()) {
 
       // Boş arama: her şeyi göster, header'ı temizle
       if (!searchTerm) {
-        for (const it of items) it.el.style.display = "flex";
-        for (const folder of folders) folder.style.display = "block";
-        const bestMatchContainer = document.querySelector("#best-match");
-        if (bestMatchContainer) bestMatchContainer.innerHTML = "";
-        bestMatches = [];
+        resetSearchResults({ folders, items });
         return;
       }
 
@@ -707,7 +531,8 @@ if (isSearchEnabled()) {
       }
 
       // Top 3 best-match header'da
-      updateHeader(orderedMatches.length ? orderedMatches.slice(0, 3) : null);
+      if (orderedMatches.length) updateHeader(orderedMatches.slice(0, 3));
+      else clearBestMatches();
     }, 80)
   );
 }
@@ -738,45 +563,20 @@ chrome.commands
   })
   .catch(() => {});
 
-async function closePanel() {
-  if (IS_SIDEBAR_MODE) {
-    try {
-      const sidebarApi = globalThis.browser?.sidebarAction;
-      if (sidebarApi?.close) return await sidebarApi.close();
-      if (chrome.sidePanel?.close) {
-        const win = await chrome.windows.getCurrent();
-        return await chrome.sidePanel.close({ windowId: win.id });
-      }
-    } catch (e) {
-      console.warn("Failed to close side panel:", e);
-    }
-  }
-  window.close();
-}
-
 window.addEventListener("keydown", function (event) {
   if (matchesShortcut(actionShortcut, event)) {
     event.preventDefault();
-    closePanel();
+    window.close();
     return;
   }
+  if (event.defaultPrevented || event.isComposing || !SETTINGS_OVERLAY.el?.hidden) return;
 
   if (event.key === "Escape") {
     event.preventDefault();
     // 只在搜索功能开启时才处理清空搜索
     if (isSearchEnabled()) {
       searchInput.value = "";
-
-      let bookmarks = document.getElementsByClassName(CLASS_NAMES.bookmark);
-      let folders = document.getElementsByClassName(CLASS_NAMES.folder);
-
-      for (let bookmark of bookmarks) {
-        bookmark.style.display = "flex";
-      }
-
-      for (let folder of folders) {
-        folder.style.display = "block";
-      }
+      resetSearchResults(getBookmarkCache());
     }
   }
 
@@ -792,20 +592,18 @@ window.addEventListener("keydown", function (event) {
     showBestMatchTips();
   }
 
-  if (event.key === "Enter") {
+  if (event.key === "Enter" && event.target === searchInput && bestMatches.length !== 0) {
     event.preventDefault();
-    if (isSearchEnabled() && bestMatches.length !== 0) {
-      const url = bestMatches[activeBestMatchIndex].url;
-      const openInNewTab = isOpenInNewTabEnabled();
-      const keepPanelOpen = isKeepPanelOpenEnabled();
+    const url = bestMatches[activeBestMatchIndex].url;
+    const openInNewTab = isOpenInNewTabEnabled();
+    const keepPanelOpen = isKeepPanelOpenEnabled();
 
-      if (keepPanelOpen) {
-        createTab(url, false);
-      } else if (openInNewTab) {
-        createTab(url);
-      } else {
-        updateCurrentTab(url);
-      }
+    if (keepPanelOpen) {
+      createTab(url, false);
+    } else if (openInNewTab) {
+      createTab(url);
+    } else {
+      updateCurrentTab(url);
     }
   }
 
@@ -835,66 +633,46 @@ function applySearchLayout(container, bookmarksContainer) {
   }
 }
 
-function finishPopupLayout(container, bookmarksContainer) {
-  void container;
-  void bookmarksContainer;
-  applyFixedPopupSize();
-}
-
 function renderBookmarkTree(bookmarkTreeNodes) {
   if (!bookmarkTreeNodes || !bookmarkTreeNodes.length) {
     return;
   }
-  folderCount = countFolders(bookmarkTreeNodes[0].children || []);
+  const visibleBookmarkTree = prepareVisibleBookmarkTree(bookmarkTreeNodes);
   const container = document.querySelector("#search-wrapper");
   const bookmarksContainer = document.querySelector("#bookmarks");
 
-  createBookmarks(bookmarkTreeNodes);
+  createBookmarks(visibleBookmarkTree);
   updateSearchFeatureVisibility();
   applySearchLayout(container, bookmarksContainer);
-  finishPopupLayout(container, bookmarksContainer);
-  alignCorner();
 }
 
-// 右上角的两个按钮和最上面一行内容并排，这一行让出按钮的宽度，顶部不再单独空出一行
-// 搜索框例外：它铺满整行，按钮放进框内右侧，两边留同样的空让文字保持居中
-const CORNER_GAP = 8;
-const CORNER_INSET = 6;
-function alignCorner() {
-  const corner = document.querySelector(".settings-wrapper");
-  if (!corner) return;
-  document.querySelectorAll("[data-corner-inset]").forEach((el) => {
-    el.style.removeProperty(el.dataset.cornerInset);
-    delete el.dataset.cornerInset;
-  });
-  corner.style.removeProperty("right");
-  document.querySelectorAll("[data-corner-row]").forEach((el) => delete el.dataset.cornerRow);
-  const input = document.getElementById("searchInput");
-  const row = isSearchEnabled() && input ? input : document.querySelector("#bookmarks .folderTitle");
-  if (!row) {
-    corner.style.removeProperty("top");
-    return;
-  }
-  // 指针移到这一行时右上角按钮跟着出现
-  row.dataset.cornerRow = "";
-  const cornerBox = corner.getBoundingClientRect();
-  const rowBox = row.getBoundingClientRect();
-  if (row === input) {
-    corner.style.right = `${document.documentElement.clientWidth - rowBox.right + CORNER_INSET}px`;
-    row.style.setProperty("padding-inline", `${CORNER_INSET + cornerBox.width + CORNER_GAP}px`);
-    row.dataset.cornerInset = "padding-inline";
-  } else {
-    const overlap = rowBox.right - (cornerBox.left - CORNER_GAP);
-    if (overlap > 0) {
-      const margin = parseFloat(getComputedStyle(row).marginRight) || 0;
-      row.style.setProperty("margin-right", `${margin + overlap}px`);
-      row.dataset.cornerInset = "margin-right";
+function prepareVisibleBookmarkTree(bookmarkTreeNodes) {
+  if (!bookmarkTreeNodes?.length) return bookmarkTreeNodes;
+
+  const root = bookmarkTreeNodes[0];
+  const mobileFolderNames = new Set(["Mobile bookmarks", "Mobile Bookmarks", "移动设备书签", "移动书签"]);
+  const bookmarksBarNames = new Set(["Bookmarks Bar", "Bookmarks bar", "收藏夹栏", "书签栏"]);
+  const visibleChildren = [];
+
+  for (const node of root.children || []) {
+    // 内置文件夹优先按浏览器提供的类型识别，兼容旧版 Chrome 和 Firefox 的固定 ID。
+    const isMobileFolder = node.folderType
+      ? node.folderType === "mobile"
+      : node.id === "3" || node.id === "mobile______" || mobileFolderNames.has(node.title);
+    if (isMobileFolder) continue;
+
+    const isBookmarksBar = node.folderType
+      ? node.folderType === "bookmarks-bar"
+      : node.id === "1" || node.id === "toolbar_____" || bookmarksBarNames.has(node.title);
+    if (isBookmarksBar) {
+      visibleChildren.push(...(node.children || []));
+    } else {
+      visibleChildren.push(node);
     }
   }
-  const top = rowBox.top + document.body.scrollTop + (rowBox.height - cornerBox.height) / 2;
-  corner.style.top = `${Math.round(top)}px`;
+
+  return [{ ...root, children: visibleChildren }];
 }
-window.addEventListener("resize", alignCorner);
 
 async function fetchBookmarkTree() {
   if (typeof browser !== "undefined") {
@@ -919,30 +697,29 @@ async function initializePopup() {
   }
 }
 
-// 在DOM ready时立即设置高度并初始化
-document.addEventListener("DOMContentLoaded", function () {
-  setBodyHeightFromStorage();
-  initializePopup();
-});
-
-function setBodyHeightFromStorage() {
-  applyFixedPopupSize();
-}
+document.addEventListener("DOMContentLoaded", initializePopup);
 
 function createBookmarks(bookmarkTreeNodes) {
   const bookmarksContainer = document.getElementById("bookmarks");
   bookmarksContainer.innerHTML = "";
 
-  if (folderCount === 0) {
+  if (!hasBookmarkNodes(bookmarkTreeNodes)) {
     showEmptyBookmarkMessage();
   } else {
     // DocumentFragment ile DOM'a tek seferde ekle (reflow azaltır)
     const fragment = document.createDocumentFragment();
     showBookmarks(bookmarkTreeNodes, fragment);
     bookmarksContainer.appendChild(fragment);
+    initializeTopLevelSorting();
   }
   // Bookmark DOM'u değişti; arama cache'ini geçersiz kıl
   invalidateBookmarkCache();
+}
+
+function hasBookmarkNodes(bookmarkNodes) {
+  return (bookmarkNodes || []).some(
+    (node) => Boolean(node.url) || (node.children?.length > 0 && hasBookmarkNodes(node.children))
+  );
 }
 
 function showEmptyBookmarkMessage() {
@@ -952,10 +729,53 @@ function showEmptyBookmarkMessage() {
   bookmarksContainer.appendChild(messageElement);
 }
 
-function showBookmarks(bookmarkNodes, parent, parentTitle = []) {
+function getBookmarkOrderKey(bookmarkNode) {
+  if (bookmarkNode.id) return `id:${bookmarkNode.id}`;
+  if (bookmarkNode.url) return `url:${bookmarkNode.url}`;
+  return `folder:${bookmarkNode.title || "untitled"}`;
+}
+
+function getStoredTopLevelOrder() {
+  try {
+    const storedOrder = JSON.parse(localStorage.getItem(TOP_LEVEL_ORDER_KEY) || "[]");
+    return Array.isArray(storedOrder) ? storedOrder : [];
+  } catch {
+    return [];
+  }
+}
+
+function sortTopLevelBookmarks(bookmarkNodes) {
+  const storedOrder = getStoredTopLevelOrder();
+  if (!storedOrder.length) return bookmarkNodes;
+
+  const orderIndex = new Map(storedOrder.map((key, index) => [key, index]));
+  return bookmarkNodes
+    .map((node, index) => ({ node, index, storedIndex: orderIndex.get(getBookmarkOrderKey(node)) }))
+    .sort((left, right) => {
+      const leftIndex = left.storedIndex ?? storedOrder.length + left.index;
+      const rightIndex = right.storedIndex ?? storedOrder.length + right.index;
+      return leftIndex - rightIndex;
+    })
+    .map(({ node }) => node);
+}
+
+function showBookmarks(bookmarkNodes, parent, parentTitle = [], useTopLevelOrder = false) {
   if (!bookmarkNodes || !bookmarkNodes.length) {
     return;
   }
+
+  if (useTopLevelOrder) {
+    // 跨书签栏文件夹的顺序只写入扩展存储，避免改动浏览器书签树。
+    sortTopLevelBookmarks(bookmarkNodes).forEach((bookmarkNode) => {
+      if (bookmarkNode.url) {
+        createBookmarkItem(bookmarkNode, parent);
+      } else if (bookmarkNode.children?.length > 0) {
+        createFolderForBookmarks(bookmarkNode, parent, parentTitle);
+      }
+    });
+    return;
+  }
+
   // 优先显示书签，再显示文件夹
   const bookmarkItems = bookmarkNodes.filter((node) => node.url);
   bookmarkItems.forEach((bookmarkNode) => {
@@ -975,6 +795,7 @@ function createBookmarkItem(bookmarkNode, parent) {
 
   let bookItem = createElement("a", CLASS_NAMES.bookmark);
   bookItem.href = bookmarkNode.url;
+  bookItem.dataset.orderKey = getBookmarkOrderKey(bookmarkNode);
 
   // 设置打开方式
   if (isOpenInNewTabEnabled()) {
@@ -1059,107 +880,230 @@ function createBookmarkItem(bookmarkNode, parent) {
 
 function createFolderForBookmarks(bookmarkNode, parent, parentTitle = []) {
   let folder = createElement("div", CLASS_NAMES.folder);
+  folder.dataset.orderKey = getBookmarkOrderKey(bookmarkNode);
   let childContainer = createElement("div", CLASS_NAMES.childContainer);
+  if (!bookmarkNode.title) {
+    folder.classList.add("folder-root");
+  }
   // 递归传递父级的 title
   const title = [...parentTitle];
   title.push(bookmarkNode.title);
-  // 如果文件夹下有书签，则显示标题，否则如全是文件夹则不显示
-  if (bookmarkNode.children?.filter((node) => node.url).length > 0) {
-    if (folderCount > 1 && bookmarkNode.title) {
-      let folderName = bookmarkNode.title;
-      // 如果是多级目录，则在标题前面加上父级目录
-      if (title.length > 2) {
-        for (let i = title.length - 2; i > 1; i--) {
-          folderName = title[i] + " / " + folderName;
-        }
+  // 每一级目录都保留独立节点，让 DOM 与浏览器书签层级一致。
+  if (bookmarkNode.title) {
+    let folderTitle = createElement("h2", CLASS_NAMES.folderTitle, "");
+    const folderLabel = document.createElement("span");
+    folderLabel.className = "folder-label";
+    folderLabel.textContent = bookmarkNode.title;
+
+    const isCollapsible = bookmarkNode.children?.length > 0;
+
+    if (isCollapsible) {
+      const folderStateKey = getFolderStateKey(bookmarkNode, title);
+      const legacyFolderState = localStorage.getItem(bookmarkNode.title);
+      const folderState = localStorage.getItem(folderStateKey) || legacyFolderState;
+      if (!localStorage.getItem(folderStateKey) && legacyFolderState) {
+        localStorage.setItem(folderStateKey, legacyFolderState);
       }
 
-      let folderTitle = createElement("h2", CLASS_NAMES.folderTitle, "");
-      const folderLabel = document.createElement("span");
-      folderLabel.className = "folder-label";
-      folderLabel.textContent = folderName;
+      folderTitle.classList.add("collapsible-folder");
+      folderTitle.dataset.folderStateKey = folderStateKey;
+      folderTitle.appendChild(folderLabel);
+      const arrow = document.createElement("span");
+      arrow.className = "folder-arrow";
+      folderTitle.appendChild(arrow);
+      folderTitle.title = keyText;
+      folderTitle.style.cursor = "pointer";
+      folderTitle.setAttribute("role", "button");
+      folderTitle.setAttribute("tabindex", "0");
 
-      const isCollapsible = bookmarkNode.title !== "Favorites Bar" && bookmarkNode.title !== "收藏夹栏";
-
-      if (isCollapsible) {
-        const folderStateKey = getFolderStateKey(bookmarkNode, title);
-        const legacyFolderState = localStorage.getItem(bookmarkNode.title);
-        const folderState = localStorage.getItem(folderStateKey) || legacyFolderState;
-        if (!localStorage.getItem(folderStateKey) && legacyFolderState) {
-          localStorage.setItem(folderStateKey, legacyFolderState);
-        }
-
-        folderTitle.classList.add("collapsible-folder");
-        folderTitle.appendChild(folderLabel);
-        const arrow = document.createElement("span");
-        arrow.className = "folder-arrow";
-        folderTitle.appendChild(arrow);
-        folderTitle.title = keyText;
-        folderTitle.style.cursor = "pointer";
-
-        // 判断是否在之前被收起来了
-        if (folderState === "collapsed") {
-          childContainer.style.display = "none";
-          folderTitle.classList.add("collapsed");
-        } else {
-          folderTitle.classList.add("expanded");
-        }
-
-        folderTitle.addEventListener("click", function (event) {
-          // 如果按住 ctrl 或 meta 键（Mac上的command键）则批量打开书签
-          if (event.ctrlKey || event.metaKey) {
-            const keepPanelOpen = isKeepPanelOpenEnabled();
-            for (let childNode of bookmarkNode.children) {
-              if (childNode.url) {
-                createTab(childNode.url, !keepPanelOpen);
-              }
-            }
-            event.preventDefault();
-            return;
-          }
-
-          // 为展开/收起添加事件
-          if (childContainer.style.display === "none") {
-            childContainer.style.display = "flex";
-            localStorage.setItem(folderStateKey, "expanded");
-            folderTitle.classList.remove("collapsed");
-            folderTitle.classList.add("expanded");
-          } else {
-            childContainer.style.display = "none";
-            localStorage.setItem(folderStateKey, "collapsed");
-            folderTitle.classList.add("collapsed");
-            folderTitle.classList.remove("expanded");
-          }
-
-          // 只有在普通点击（非批量打开）时才更新高度
-          setTimeout(() => {
-            updatePopupHeight();
-          }, 100); // 等待展开/收起动画完成
-        });
+      // 判断是否在之前被收起来了
+      if (folderState === "collapsed") {
+        childContainer.style.display = "none";
+        folderTitle.classList.add("collapsed");
+        folderTitle.setAttribute("aria-expanded", "false");
       } else {
-        folderTitle.appendChild(folderLabel);
+        folderTitle.classList.add("expanded");
+        folderTitle.setAttribute("aria-expanded", "true");
       }
 
-      folder.appendChild(folderTitle);
+      const toggleFolder = function (event) {
+        // 如果按住 ctrl 或 meta 键（Mac上的command键）则批量打开书签
+        if (event.ctrlKey || event.metaKey) {
+          const keepPanelOpen = isKeepPanelOpenEnabled();
+          for (let childNode of bookmarkNode.children) {
+            if (childNode.url) {
+              createTab(childNode.url, !keepPanelOpen);
+            }
+          }
+          event.preventDefault();
+          return;
+        }
+
+        // 为展开/收起添加事件
+        if (childContainer.style.display === "none") {
+          childContainer.style.display = "block";
+          localStorage.setItem(folderStateKey, "expanded");
+          folderTitle.classList.remove("collapsed");
+          folderTitle.classList.add("expanded");
+          folderTitle.setAttribute("aria-expanded", "true");
+        } else {
+          childContainer.style.display = "none";
+          localStorage.setItem(folderStateKey, "collapsed");
+          folderTitle.classList.add("collapsed");
+          folderTitle.classList.remove("expanded");
+          folderTitle.setAttribute("aria-expanded", "false");
+        }
+      };
+
+      folderTitle.addEventListener("click", toggleFolder);
+      folderTitle.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggleFolder(event);
+        }
+      });
     } else {
-      folder.style.marginTop = "8px";
+      folderTitle.appendChild(folderLabel);
     }
+
+    folder.appendChild(folderTitle);
   }
 
-  showBookmarks(bookmarkNode.children, childContainer, title);
+  showBookmarks(bookmarkNode.children, childContainer, title, !bookmarkNode.title);
 
   folder.appendChild(childContainer);
   parent.appendChild(folder);
 }
 
-function countFolders(bookmarkNodes) {
-  let count = 0;
-  for (let i = 0; i < bookmarkNodes.length; i++) {
-    if (bookmarkNodes[i].children && bookmarkNodes[i].children.length > 0) {
-      count += 1 + countFolders(bookmarkNodes[i].children);
+function initializeTopLevelSorting() {
+  const container = document.querySelector("#bookmarks .folder-root > .childContainer");
+  if (!container) return;
+
+  const sortableItems = Array.from(container.children).filter(
+    (item) => item.classList.contains(CLASS_NAMES.bookmark) || item.classList.contains(CLASS_NAMES.folder)
+  );
+  const sortHint = isZhUI ? "拖动排序，或按 Alt + ↑/↓" : "Drag to reorder, or press Alt + ↑/↓";
+  let draggedItem = null;
+  let dropTarget = null;
+  let dropAfter = false;
+
+  const getRow = (item) =>
+    item.classList.contains(CLASS_NAMES.bookmark)
+      ? item
+      : item.querySelector(":scope > .folderTitle");
+
+  const saveOrder = () => {
+    const order = Array.from(container.children)
+      .map((item) => item.dataset.orderKey)
+      .filter(Boolean);
+    localStorage.setItem(TOP_LEVEL_ORDER_KEY, JSON.stringify(order));
+    invalidateBookmarkCache();
+  };
+
+  const clearDropState = () => {
+    container.querySelectorAll(".drag-before, .drag-after").forEach((item) => {
+      item.classList.remove("drag-before", "drag-after");
+    });
+    dropTarget = null;
+    dropAfter = false;
+  };
+
+  const getDirectItem = (target) => {
+    const item = target.closest(".top-level-sortable");
+    return item?.parentElement === container ? item : null;
+  };
+
+  const showDropTarget = (item, after) => {
+    clearDropState();
+    dropTarget = item;
+    dropAfter = after;
+    item.classList.add(after ? "drag-after" : "drag-before");
+  };
+
+  sortableItems.forEach((item) => {
+    const row = getRow(item);
+    if (!row || !item.dataset.orderKey) return;
+
+    item.classList.add("top-level-sortable");
+    row.draggable = true;
+    row.title = [row.title, sortHint].filter(Boolean).join("\n");
+  });
+
+  container.addEventListener("dragstart", (event) => {
+    const item = getDirectItem(event.target);
+    const row = item ? getRow(item) : null;
+    if (!item || !row?.contains(event.target)) {
+      event.preventDefault();
+      return;
     }
-  }
-  return count;
+
+    draggedItem = item;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", item.dataset.orderKey);
+    requestAnimationFrame(() => item.classList.add("dragging"));
+  });
+
+  container.addEventListener("dragover", (event) => {
+    if (!draggedItem) return;
+    const item = getDirectItem(event.target);
+    if (item && item !== draggedItem) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const currentItems = Array.from(container.children);
+      const draggedIndex = currentItems.indexOf(draggedItem);
+      const targetIndex = currentItems.indexOf(item);
+      showDropTarget(item, targetIndex > draggedIndex);
+      return;
+    }
+
+    if (item === draggedItem) return;
+
+    // 列表顶部和底部的空白区域也可以作为首尾落点。
+    const remainingItems = Array.from(container.children).filter((candidate) => candidate !== draggedItem);
+    if (!remainingItems.length) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const firstItem = remainingItems[0];
+    const lastItem = remainingItems[remainingItems.length - 1];
+    const firstRow = getRow(firstItem);
+    const lastRow = getRow(lastItem);
+    const distanceToFirst = Math.abs(event.clientY - firstRow.getBoundingClientRect().top);
+    const distanceToLast = Math.abs(event.clientY - lastRow.getBoundingClientRect().bottom);
+    showDropTarget(distanceToFirst <= distanceToLast ? firstItem : lastItem, distanceToFirst > distanceToLast);
+  });
+
+  container.addEventListener("drop", (event) => {
+    if (!draggedItem || !dropTarget) return;
+    event.preventDefault();
+    container.insertBefore(draggedItem, dropAfter ? dropTarget.nextSibling : dropTarget);
+    saveOrder();
+    clearDropState();
+  });
+
+  container.addEventListener("dragend", () => {
+    draggedItem?.classList.remove("dragging");
+    draggedItem = null;
+    clearDropState();
+  });
+
+  container.addEventListener("keydown", (event) => {
+    if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+    const item = getDirectItem(event.target);
+    if (!item) return;
+
+    const sibling = event.key === "ArrowUp" ? item.previousElementSibling : item.nextElementSibling;
+    if (!sibling) return;
+
+    event.preventDefault();
+    if (event.key === "ArrowUp") {
+      container.insertBefore(item, sibling);
+    } else {
+      container.insertBefore(sibling, item);
+    }
+    saveOrder();
+    getRow(item)?.focus();
+    Notification.show(isZhUI ? "已调整插件内排序" : "Extension order updated", 1200);
+  });
 }
 
 function getFolderStateKey(bookmarkNode, titlePath) {

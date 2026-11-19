@@ -26,7 +26,7 @@ const TOP_LEVEL_ORDER_KEY = "MAPLE_TOP_LEVEL_ORDER";
 
 // 获取搜索功能开启状态
 function isSearchEnabled() {
-  return localStorage.getItem(SETTINGS_KEYS.SEARCH_ENABLED) === "true";
+  return localStorage.getItem(SETTINGS_KEYS.SEARCH_ENABLED) !== "false";
 }
 
 // 获取 tips 功能开启状态
@@ -70,7 +70,6 @@ const CLASS_NAMES = {
 };
 
 let searchInput = document.getElementById("searchInput");
-let hotArea = document.querySelector("#hot-area");
 let settingsBtn = document.getElementById("settingsBtn");
 let settingsWrapper = document.querySelector(".settings-wrapper");
 let collapseAllBtn = document.getElementById("collapseAllBtn");
@@ -78,8 +77,6 @@ let expandAllBtn = document.getElementById("expandAllBtn");
 
 let activeBestMatchIndex = 0;
 let hideTimeout = null;
-// Search açıkken popup'ta hep görünür olsun
-let searchIsHide = !isSearchEnabled();
 
 let bestMatches = [];
 localStorage.removeItem("persistedHeader");
@@ -235,7 +232,7 @@ const SETTINGS_OVERLAY = {
         });
       }
     }
-    if (search) search.checked = localStorage.getItem(SETTINGS_KEYS.SEARCH_ENABLED) === "true";
+    if (search) search.checked = localStorage.getItem(SETTINGS_KEYS.SEARCH_ENABLED) !== "false";
     if (tips) tips.checked = localStorage.getItem(SETTINGS_KEYS.TIPS_ENABLED) === "true";
     if (newtab) newtab.checked = localStorage.getItem(SETTINGS_KEYS.OPEN_IN_NEW_TAB) !== "false";
     if (keep) keep.checked = localStorage.getItem(SETTINGS_KEYS.KEEP_PANEL_OPEN) === "true";
@@ -276,27 +273,6 @@ if (settingsWrapper && localStorage.getItem(HAS_SEEN_SETTINGS_HINT_KEY) !== "tru
   setTimeout(() => {
     settingsWrapper.classList.remove("show-once");
   }, 1800);
-}
-
-// 更新搜索功能显示状态
-function updateSearchFeatureVisibility() {
-  const searchWrapper = document.querySelector("#search-wrapper");
-  const hotArea = document.querySelector("#hot-area");
-
-  if (!isSearchEnabled()) {
-    // 搜索功能关闭时，完全隐藏搜索相关元素
-    searchWrapper.style.display = "none";
-    hotArea.style.display = "none";
-    // 清空最佳匹配
-    const bestMatchContainer = document.querySelector("#best-match");
-    if (bestMatchContainer) {
-      bestMatchContainer.innerHTML = "";
-    }
-  } else {
-    // 搜索功能开启时，恢复正常显示
-    searchWrapper.style.display = "block";
-    hotArea.style.display = searchIsHide ? "block" : "none";
-  }
 }
 
 function showLoadingState() {
@@ -490,67 +466,46 @@ function resetSearchResults({ folders, items }) {
 }
 
 // 每次输入只进行一次 Fuse 检索，并复用同一份 DOM 缓存。
-if (isSearchEnabled()) {
-  searchInput.addEventListener(
-    "input",
-    debounce(function () {
-      const rawTerm = searchInput.value;
-      const searchTerm = rawTerm.toLowerCase().trim();
-      const { folders, items } = getBookmarkCache();
+function filterBookmarks() {
+  const searchTerm = searchInput.value.toLowerCase().trim();
+  const { folders, items } = getBookmarkCache();
 
-      // Boş arama: her şeyi göster, header'ı temizle
-      if (!searchTerm) {
-        resetSearchResults({ folders, items });
-        return;
-      }
-
-      // Tek Fuse search; tüm sonuçları al, dedupe et
-      const fuse = getFuseInstance();
-      const results = fuse.search(searchTerm);
-      const matchedUrls = new Set();
-      const orderedMatches = [];
-      for (const r of results) {
-        if (!matchedUrls.has(r.item.url)) {
-          matchedUrls.add(r.item.url);
-          orderedMatches.push(r.item);
-        }
-      }
-
-      // Görünür bookmark'ı içeren tüm ata folder'ları işaretle (nested folders için)
-      const visibleFolders = new Set();
-      for (const it of items) {
-        const visible =
-          it.titleLower.includes(searchTerm) || it.urlLower.includes(searchTerm) || matchedUrls.has(it.url);
-        it.el.style.display = visible ? "flex" : "none";
-        if (visible) {
-          for (const f of it.ancestors) visibleFolders.add(f);
-        }
-      }
-      for (const folder of folders) {
-        folder.style.display = visibleFolders.has(folder) ? "block" : "none";
-      }
-
-      // Top 3 best-match header'da
-      if (orderedMatches.length) updateHeader(orderedMatches.slice(0, 3));
-      else clearBestMatches();
-    }, 80)
-  );
-}
-
-// fix under mask click
-document.addEventListener("click", function (e) {
-  const underMaskEle = [...document.elementsFromPoint(e.clientX, e.clientY)].find(
-    (el) =>
-      (el.classList.contains("search-action") || el.classList.contains(CLASS_NAMES.folderTitle)) &&
-      e.target.id === "hot-area"
-  );
-  if (underMaskEle) {
-    const clickEvent = new CustomEvent("click", {
-      detail: {},
-    });
-    underMaskEle.dispatchEvent(clickEvent);
+  // 清空搜索时恢复书签树。
+  if (!searchTerm) {
+    resetSearchResults({ folders, items });
+    return;
   }
-});
+
+  // 同一网址只进入一次最佳匹配。
+  const fuse = getFuseInstance();
+  const results = fuse.search(searchTerm);
+  const matchedUrls = new Set();
+  const orderedMatches = [];
+  for (const r of results) {
+    if (!matchedUrls.has(r.item.url)) {
+      matchedUrls.add(r.item.url);
+      orderedMatches.push(r.item);
+    }
+  }
+
+  // 保留匹配书签的各级父目录。
+  const visibleFolders = new Set();
+  for (const it of items) {
+    const visible =
+      it.titleLower.includes(searchTerm) || it.urlLower.includes(searchTerm) || matchedUrls.has(it.url);
+    it.el.style.display = visible ? "flex" : "none";
+    if (visible) {
+      for (const f of it.ancestors) visibleFolders.add(f);
+    }
+  }
+  for (const folder of folders) {
+    folder.style.display = visibleFolders.has(folder) ? "block" : "none";
+  }
+
+  // 搜索框下方最多显示三项最佳匹配。
+  if (orderedMatches.length) updateHeader(orderedMatches.slice(0, 3));
+  else clearBestMatches();
+}
 
 // 再按一次打开面板的快捷键时收起面板，读的是用户当前设置的快捷键
 let actionShortcut = null;
@@ -581,13 +536,13 @@ window.addEventListener("keydown", function (event) {
   }
 
   if (event.key === "ArrowLeft") {
-    if (searchIsHide || !isSearchEnabled()) return;
+    if (!isSearchEnabled()) return;
     updateActiveBestMatch(activeBestMatchIndex - 1);
     showBestMatchTips();
   }
 
   if (event.key === "ArrowRight") {
-    if (searchIsHide || !isSearchEnabled()) return;
+    if (!isSearchEnabled()) return;
     updateActiveBestMatch(activeBestMatchIndex + 1);
     showBestMatchTips();
   }
@@ -609,41 +564,16 @@ window.addEventListener("keydown", function (event) {
 
   if (event.ctrlKey && event.key === "s") {
     event.preventDefault();
-    // Search bar her zaman görünür — Ctrl+S sadece odakla
+    // Ctrl+S 将焦点移回搜索框。
     if (isSearchEnabled()) {
       searchInput?.focus();
     }
   }
 });
 
-function applySearchLayout(container, bookmarksContainer) {
-  if (!container || !bookmarksContainer || !isSearchEnabled()) {
-    return;
-  }
-  if (searchIsHide) {
-    // -8 是因为有 8px 的 margin
-    const searchBarContainerHeight = container.clientHeight - 8;
-    bookmarksContainer.style.transform = `translateY(-${searchBarContainerHeight}px)`;
-    hotArea.style.display = "block";
-  } else {
-    container.classList.add("show");
-    bookmarksContainer.style.transform = `translateY(-8px)`;
-    searchInput.focus();
-    hotArea.style.display = "none";
-  }
-}
-
 function renderBookmarkTree(bookmarkTreeNodes) {
-  if (!bookmarkTreeNodes || !bookmarkTreeNodes.length) {
-    return;
-  }
-  const visibleBookmarkTree = prepareVisibleBookmarkTree(bookmarkTreeNodes);
-  const container = document.querySelector("#search-wrapper");
-  const bookmarksContainer = document.querySelector("#bookmarks");
-
-  createBookmarks(visibleBookmarkTree);
-  updateSearchFeatureVisibility();
-  applySearchLayout(container, bookmarksContainer);
+  if (!bookmarkTreeNodes?.length) return;
+  createBookmarks(prepareVisibleBookmarkTree(bookmarkTreeNodes));
 }
 
 function prepareVisibleBookmarkTree(bookmarkTreeNodes) {
@@ -682,18 +612,26 @@ async function fetchBookmarkTree() {
 }
 
 async function initializePopup() {
+  const searchEnabled = isSearchEnabled();
+  document.getElementById("search-wrapper").hidden = !searchEnabled;
+  if (searchEnabled) {
+    // 先聚焦，再加载书签，快捷键打开后无需等待就能开始输入。
+    searchInput.focus({ preventScroll: true });
+  }
   showLoadingState();
 
   try {
     const bookmarkTreeNodes = await fetchBookmarkTree();
     renderBookmarkTree(bookmarkTreeNodes);
+    if (searchEnabled) {
+      // 加载期间输入的内容也要用完整书签树检索。
+      if (searchInput.value) filterBookmarks();
+      searchInput.addEventListener("input", debounce(filterBookmarks, 80));
+    }
   } catch (error) {
     console.error("Failed to load bookmark tree:", error);
   } finally {
     document.body.classList.remove("popup-loading");
-    requestAnimationFrame(() => {
-      document.body.classList.add("popup-interactive");
-    });
   }
 }
 
@@ -764,28 +702,12 @@ function showBookmarks(bookmarkNodes, parent, parentTitle = [], useTopLevelOrder
     return;
   }
 
-  if (useTopLevelOrder) {
-    // 跨书签栏文件夹的顺序只写入扩展存储，避免改动浏览器书签树。
-    sortTopLevelBookmarks(bookmarkNodes).forEach((bookmarkNode) => {
-      if (bookmarkNode.url) {
-        createBookmarkItem(bookmarkNode, parent);
-      } else if (bookmarkNode.children?.length > 0) {
-        createFolderForBookmarks(bookmarkNode, parent, parentTitle);
-      }
-    });
-    return;
-  }
-
-  // 优先显示书签，再显示文件夹
-  const bookmarkItems = bookmarkNodes.filter((node) => node.url);
-  bookmarkItems.forEach((bookmarkNode) => {
-    createBookmarkItem(bookmarkNode, parent);
-  });
-
-  const bookmarkFolders = bookmarkNodes.filter((node) => node.children && node.children.length > 0);
-  bookmarkFolders.forEach((bookmarkNode) => {
-    createFolderForBookmarks(bookmarkNode, parent, parentTitle);
-  });
+  // 保存的顶层顺序只在同类项目内生效，各级始终先显示文件夹。
+  const orderedNodes = useTopLevelOrder ? sortTopLevelBookmarks(bookmarkNodes) : bookmarkNodes;
+  const folders = orderedNodes.filter((node) => node.children?.length > 0);
+  const links = orderedNodes.filter((node) => node.url);
+  folders.forEach((node) => createFolderForBookmarks(node, parent, parentTitle));
+  links.forEach((node) => createBookmarkItem(node, parent));
 }
 
 function createBookmarkItem(bookmarkNode, parent) {
@@ -882,7 +804,8 @@ function createFolderForBookmarks(bookmarkNode, parent, parentTitle = []) {
   let folder = createElement("div", CLASS_NAMES.folder);
   folder.dataset.orderKey = getBookmarkOrderKey(bookmarkNode);
   let childContainer = createElement("div", CLASS_NAMES.childContainer);
-  if (!bookmarkNode.title) {
+  const isRoot = parentTitle.length === 0;
+  if (isRoot) {
     folder.classList.add("folder-root");
   }
   // 递归传递父级的 title
@@ -969,7 +892,7 @@ function createFolderForBookmarks(bookmarkNode, parent, parentTitle = []) {
     folder.appendChild(folderTitle);
   }
 
-  showBookmarks(bookmarkNode.children, childContainer, title, !bookmarkNode.title);
+  showBookmarks(bookmarkNode.children, childContainer, title, isRoot);
 
   folder.appendChild(childContainer);
   parent.appendChild(folder);
@@ -982,15 +905,13 @@ function initializeTopLevelSorting() {
   const sortableItems = Array.from(container.children).filter(
     (item) => item.classList.contains(CLASS_NAMES.bookmark) || item.classList.contains(CLASS_NAMES.folder)
   );
-  const sortHint = isZhUI ? "拖动排序，或按 Alt + ↑/↓" : "Drag to reorder, or press Alt + ↑/↓";
+  const sortHint = isZhUI ? "同类项目可拖动排序，或按 Alt + ↑/↓" : "Drag or press Alt + ↑/↓ to reorder within the group";
   let draggedItem = null;
   let dropTarget = null;
   let dropAfter = false;
 
-  const getRow = (item) =>
-    item.classList.contains(CLASS_NAMES.bookmark)
-      ? item
-      : item.querySelector(":scope > .folderTitle");
+  const isLink = (item) => item.classList.contains(CLASS_NAMES.bookmark);
+  const getRow = (item) => (isLink(item) ? item : item.querySelector(":scope > .folderTitle"));
 
   const saveOrder = () => {
     const order = Array.from(container.children)
@@ -1046,7 +967,11 @@ function initializeTopLevelSorting() {
   container.addEventListener("dragover", (event) => {
     if (!draggedItem) return;
     const item = getDirectItem(event.target);
-    if (item && item !== draggedItem) {
+    if (item) {
+      if (item === draggedItem || isLink(item) !== isLink(draggedItem)) {
+        clearDropState();
+        return;
+      }
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
       const currentItems = Array.from(container.children);
@@ -1056,10 +981,10 @@ function initializeTopLevelSorting() {
       return;
     }
 
-    if (item === draggedItem) return;
-
-    // 列表顶部和底部的空白区域也可以作为首尾落点。
-    const remainingItems = Array.from(container.children).filter((candidate) => candidate !== draggedItem);
+    // 空白区域只能把项目放到同类组的开头或末尾。
+    const remainingItems = Array.from(container.children).filter((candidate) =>
+      candidate !== draggedItem && candidate.classList.contains("top-level-sortable") && isLink(candidate) === isLink(draggedItem)
+    );
     if (!remainingItems.length) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
@@ -1089,10 +1014,10 @@ function initializeTopLevelSorting() {
   container.addEventListener("keydown", (event) => {
     if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
     const item = getDirectItem(event.target);
-    if (!item) return;
+    if (!item || !getRow(item)?.contains(event.target)) return;
 
     const sibling = event.key === "ArrowUp" ? item.previousElementSibling : item.nextElementSibling;
-    if (!sibling) return;
+    if (!sibling || isLink(sibling) !== isLink(item)) return;
 
     event.preventDefault();
     if (event.key === "ArrowUp") {

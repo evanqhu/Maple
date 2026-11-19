@@ -74,8 +74,8 @@ if (document.readyState === "loading") {
 
 // 加载设置
 function loadSettings() {
-  // 默认搜索功能是关闭的
-  const searchEnabled = localStorage.getItem(SETTINGS_KEYS.SEARCH_ENABLED) === "true";
+  // 默认开启搜索，保留用户显式关闭的设置。
+  const searchEnabled = localStorage.getItem(SETTINGS_KEYS.SEARCH_ENABLED) !== "false";
   searchEnabledCheckbox.checked = searchEnabled;
 
   // 默认 tips 功能是关闭的

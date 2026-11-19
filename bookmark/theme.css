@@ -58,9 +58,6 @@ body {
   background: color-mix(in srgb, var(--maple-text-muted) 45%, transparent);
 }
 
-#hot-area,
-.search-action { display: none !important; }
-
 #notification-container {
   position: fixed;
   right: 10px;
@@ -91,13 +88,6 @@ body {
 
 #search-wrapper {
   position: relative;
-  margin: 0 0 8px;
-}
-
-#search-wrapper.show {
-  height: auto;
-  margin-top: 0;
-  transform: none;
 }
 
 #header {
@@ -409,8 +399,6 @@ body {
 
 .loading-state { width: 100%; }
 
-body.popup-loading #search-wrapper,
-body.popup-loading #hot-area,
 body.popup-loading #notification-container,
 body.popup-loading .settings-wrapper { visibility: hidden; }
 

@@ -52,10 +52,6 @@
         width: 100%;
       }
 
-      .search-action {
-        width: 100%;
-      }
-
       #bookmarks {
         min-height: 360px;
       }
@@ -72,16 +68,12 @@
         <button class="tree-action-btn" type="button" id="expandAllBtn" title="" aria-label="">⊞</button>
         <button class="settings-btn" id="settingsBtn" type="button" title=""><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
       </div>
-      <div id="hot-area"></div>
       <div id="notification-container"></div>
-      <div id="search-wrapper">
+      <div id="search-wrapper" hidden>
         <div id="header">
           <input id="searchInput" type="text" placeholder="Search..." />
         </div>
         <div id="best-match"></div>
-        <div class="search-action">
-          <i class="arrow"></i>
-        </div>
       </div>
       <div id="bookmarks">
         <div class="loading-state" data-loading="true" aria-label="Loading bookmarks">
